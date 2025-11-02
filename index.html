@@ -958,11 +958,9 @@ body::before {
   <div id="historyMenu"></div>
 
   <script type="module">
-    // Firebase SDK imports for the counter
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
-    // Firebase configuration for the user counter
     const firebaseConfig = {
       apiKey: "AIzaSyDG4Xbb8cPZmq3qBHwiow6EohR5tDafgxA",
       authDomain: "user-counter-c3085.firebaseapp.com",
@@ -974,11 +972,9 @@ body::before {
       databaseURL: "https://user-counter-c3085-default-rtdb.firebaseio.com"
     };
 
-    // Initialize Firebase for the counter
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // 🔹 ID tetap per device
     let deviceId = localStorage.getItem("deviceId");
     if (!deviceId) {
       deviceId = "dev-" + Math.random().toString(36).substring(2, 10);
@@ -989,7 +985,6 @@ body::before {
     const totalRef = ref(db, "totalVisitors");
     const visitedRef = ref(db, "visited/" + deviceId);
 
-    // 🔹 Tambah total visitor hanya jika belum pernah
     get(visitedRef).then(async (snap) => {
       if (!snap.exists()) {
         const totalSnap = await get(totalRef);
@@ -999,13 +994,12 @@ body::before {
       }
     });
 
-    // 🔹 Kirim heartbeat tiap 5 detik
     async function heartbeat() {
       await set(userRef, { lastActive: Date.now() });
     }
     heartbeat();
-    setInterval(heartbeat, 3000); // tiap 3 detik
-    const ACTIVE_LIMIT = 5000; // 5 detik
+    setInterval(heartbeat, 3000);
+    const ACTIVE_LIMIT = 5000;
 
     const userCountEl = document.getElementById("userCount");
     onValue(ref(db, "activeUsers"), (snapshot) => {
@@ -1028,12 +1022,13 @@ body::before {
       totalVisitorsEl.textContent = snapshot.exists() ? snapshot.val() : 0;
     });
 
-// Existing chat application script starts here
-const API_KEY_RAW_URL = "https://raw.githubusercontent.com/ChermodAldo/database_key/main/api_key.txtx";
+const API_KEY_RAW_URL = "https://raw.githubusercontent.com/ChermodAldo/database_key/main/api_keys.json";
+const SYSTEM_PROMPT_URL = "https://raw.githubusercontent.com/ChermodAldo/database_key/main/prompt.txt";
 const MODEL = "gemini-2.5-flash";
 
-const SYSTEM_PROMPT_URL = "https://raw.githubusercontent.com/ChermodAldo/database_key/main/prompt.txt";
 let actualSystemPrompt = "";
+let apiKeys = [];
+let currentKeyIndex = 0;
 let googleApiKey = null;
 
 const chatbox = document.getElementById('chatbox');
@@ -1054,39 +1049,104 @@ let allChats = JSON.parse(localStorage.getItem('data_model_ai_chats')) || {};
 let currentTopic = Object.keys(allChats)[0] || null;
 let selectedFiles = [];
 
+
 if (currentTopic) renderChat(allChats[currentTopic]);
 fetchSystemPrompt();
-fetchApiKey();
-async function fetchApiKey() {
-    try {
-        console.log("DEBUG: Mengambil API Key dari GitHub raw...");
-        const response = await fetch(API_KEY_RAW_URL);
-        if (!response.ok) {
-            throw new Error(`Gagal mengambil API Key: ${response.status} ${response.statusText}`);
-        }
-        googleApiKey = await response.text();
-        googleApiKey = googleApiKey.trim(); 
-        console.log("DEBUG: API Key berhasil dimuat!");
-    } catch (error) {
-        console.error("DEBUG: Kesalahan saat mengambil API Key:", error);
-        alert("Haha! Ada masalah saat mengambil kunci rahasia! Mungkin koneksi internetmu bermasalah, users? Atau ada yang mencoba menyabotase?");
+fetchApiKeys();
+
+async function fetchApiKeys() {
+  try {
+    console.log("DEBUG: Mengambil daftar API Key dari GitHub raw...");
+    const response = await fetch(API_KEY_RAW_URL);
+    if (!response.ok) {
+      throw new Error(`Gagal mengambil API Key: ${response.status} ${response.statusText}`);
     }
+    const data = await response.json();
+    if (!data.keys || !Array.isArray(data.keys) || data.keys.length === 0) {
+      throw new Error("Tidak ditemukan API Key valid dalam struktur JSON (properti 'keys' tidak ada atau kosong).");
+    }
+    apiKeys = data.keys.map(k => k.trim());
+    currentKeyIndex = 0;
+    googleApiKey = apiKeys[currentKeyIndex];
+    console.log(`DEBUG: Berhasil memuat ${apiKeys.length} API Key! Menggunakan key pertama: ${googleApiKey.substring(0, 5)}...`);
+  } catch (error) {
+    console.error("DEBUG: Kesalahan saat mengambil API Key:", error);
+    alert("Haha! Ada masalah saat mengambil kunci rahasia! Pastikan format file API key-mu benar (JSON dengan array 'keys') dan URL-nya sesuai, users!");
+  }
+}
+
+function switchToNextApiKey() {
+  if (currentKeyIndex < apiKeys.length - 1) {
+    currentKeyIndex++;
+    googleApiKey = apiKeys[currentKeyIndex];
+    console.warn(`⚠️ API Key limit! Beralih ke key berikutnya (#${currentKeyIndex + 1}: ${googleApiKey.substring(0, 5)}...).`);
+    return true;
+  } else {
+    console.error("❌ Semua API Key sudah limit!");
+    alert("Semua API Key sudah mencapai limit! Silakan tunggu sampai developer memperbaikinya");
+    return false;
+  }
 }
 
 async function fetchSystemPrompt() {
-    try {
-        console.log("DEBUG: Mengambil SYSTEM_PROMPT dari GitHub raw...");
-        const response = await fetch(SYSTEM_PROMPT_URL);
-        if (!response.ok) {
-            throw new Error(`Gagal mengambil prompt: ${response.status} ${response.statusText}`);
-        }
-        actualSystemPrompt = await response.text();
-        console.log("DEBUG: SYSTEM_PROMPT berhasil dimuat!");
-    } catch (error) {
-        console.error("DEBUG: Kesalahan saat mengambil SYSTEM_PROMPT:", error);
-        alert("Haha! Ada masalah saat mengambil instruksi inti! Mungkin koneksi internet, users? Atau ada yang mencoba menyabotase? Kita harus lebih pintar! 😉");
-        actualSystemPrompt = "[Error: Failed to load system prompt. Operating in basic mode.]";
+  try {
+    console.log("DEBUG: Mengambil SYSTEM_PROMPT dari GitHub raw...");
+    const response = await fetch(SYSTEM_PROMPT_URL);
+    if (!response.ok) {
+      throw new Error(`Gagal mengambil prompt: ${response.status} ${response.statusText}`);
     }
+    actualSystemPrompt = await response.text();
+    console.log("DEBUG: SYSTEM_PROMPT berhasil dimuat!");
+  } catch (error) {
+    console.error("DEBUG: Kesalahan saat mengambil SYSTEM_PROMPT:", error);
+    alert("Haha! Ada masalah saat mengambil instruksi inti! Mungkin koneksi internet, users? Atau ada yang mencoba menyabotase?");
+    actualSystemPrompt = "[Error: Failed to load system prompt. Operating in basic mode.]";
+  }
+}
+
+async function sendToGemini(requestBody) {
+  if (!googleApiKey) {
+    throw new Error("API Key belum siap. Aku butuh kunci rahasia untuk berbicara dengan Gemini!");
+  }
+
+  let attemptCount = 0;
+  const maxAttempts = apiKeys.length;
+
+  while (attemptCount < maxAttempts) {
+    try {
+      console.log(`DEBUG: Mengirim request ke Gemini menggunakan API Key: ${googleApiKey.substring(0, 5)}... (Percobaan ${attemptCount + 1}/${maxAttempts})`);
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${googleApiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (res.status === 429 || res.status === 403) {
+        console.warn(`API Key limit atau otorisasi gagal (status ${res.status}).`);
+        const switched = switchToNextApiKey();
+        if (!switched || attemptCount === maxAttempts - 1) {
+          throw new Error("Semua API Key sudah mencapai limit atau gagal! Tidak ada lagi kunci yang bisa dipakai, users!");
+        }
+        attemptCount++;
+        continue;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`API Error ${res.status}: ${errData.error?.message || 'Tidak diketahui'}`);
+      }
+
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error(`DEBUG: Gagal mengirim ke Gemini dengan key ini (percobaan ${attemptCount + 1}):`, err);
+      if (err.message.includes("Semua API Key sudah mencapai limit")) {
+          throw err;
+      }
+      throw new Error(`Terjadi kesalahan saat mengirim ke Models-Ai: ${err.message}`);
+    }
+  }
+  throw new Error("Gagal mengirim ke Gemini setelah mencoba semua API Key yang tersedia.");
 }
 
 attachFileBtn.addEventListener('click', () => {
@@ -1203,9 +1263,9 @@ async function sendMessage() {
       console.warn("DEBUG: SYSTEM_PROMPT belum dimuat saat sendMessage dipanggil.");
       return;
   }
-  if (!googleApiKey) {
-      alert("Sando-Ai: Sebentar, users! Kunci rahasia API belum siap. Aku butuh akses penuh untuk berbicara dengan Gemini! 😉");
-      console.warn("DEBUG: API Key belum dimuat saat sendMessage dipanggil.");
+  if (apiKeys.length === 0 || !googleApiKey) {
+      alert("Sando-Ai: Sebentar, users! Kunci rahasia API belum siap atau tidak ditemukan. Aku butuh akses penuh untuk berbicara dengan Gemini! 😉");
+      console.warn("DEBUG: API Key belum dimuat atau tidak ada saat sendMessage dipanggil.");
       return;
   }
 
@@ -1279,21 +1339,8 @@ async function sendMessage() {
 
     console.log("DEBUG: RequestBody siap dikirim:", requestBody);
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${googleApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      }
-    );
+    const data = await sendToGemini(requestBody);
 
-    if (!res.ok) {
-      const errData = await res.json();
-      throw new Error(`API Error ${res.status}: ${errData.error?.message || 'Tidak diketahui'}`);
-    }
-
-    const data = await res.json();
     console.log("DEBUG: Respons API:", data);
 
     const parts = data?.candidates?.[0]?.content?.parts || [];
@@ -1312,7 +1359,7 @@ async function sendMessage() {
 
     const textContainer = botBubble.querySelector(".bubble");
     textContainer.innerHTML = `<span id='typing'></span>`;
-    await typeText(textContainer.querySelector("#typing"), aiText.trim() || "(Tidak ada teks)");
+    await typeText(textContainer.querySelector("#typing"), aiText.trim() || "(Tidak ada respon)");
 
     if (aiImages.length > 0) {
       const imgWrap = document.createElement("div");
@@ -1333,6 +1380,11 @@ async function sendMessage() {
     console.error("DEBUG: Kesalahan sendMessage:", err);
     const textContainer = botBubble.querySelector(".bubble");
     textContainer.textContent = `⚠️ Terjadi kesalahan: ${err.message || 'Gagal menghubungi AI'}`;
+    if (currentKeyIndex > 0 && err.message.includes("Terjadi kesalahan saat mengirim ke Gemini") && !err.message.includes("Semua API Key sudah mencapai limit")) {
+        currentKeyIndex--;
+        googleApiKey = apiKeys[currentKeyIndex];
+        console.warn(`DEBUG: Mengembalikan ke API Key sebelumnya (#${currentKeyIndex + 1}) karena kesalahan. Kunci: ${googleApiKey.substring(0, 5)}...`);
+    }
   } finally {
     isTyping = false;
     sendBtn.style.display = 'inline-block';
@@ -1627,4 +1679,4 @@ userInput.addEventListener('keydown', (e) => {
 window.copyCode = copyCode;
   </script>
 </body>
-</html>
+  </html>
